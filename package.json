@@ -1,0 +1,17 @@
+{
+  "name": "tw-stock-portfolio",
+  "version": "1.0.0",
+  "description": "台股 AI 智慧投資組合與風險分析系統",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -p 8080",
+    "deploy": "echo 'Deploy to GitHub Pages'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/tw-stock-portfolio.git"
+  },
+  "keywords": ["台股", "投資組合", "股票", "Taiwan", "Stock", "Portfolio"],
+  "author": "Your Name",
+  "license": "MIT"
+}
