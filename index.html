@@ -279,6 +279,25 @@
 
             <!-- VIEW: AI REPORT -->
             <div id="view-ai" class="view-section flex flex-col h-full space-y-6">
+                <!-- FinMind API Key Input -->
+                <div class="card">
+                    <h3 class="text-lg font-semibold mb-4 text-blue-400"><i class="fas fa-database mr-2"></i>FinMind API 設定</h3>
+                    <p class="text-slate-400 text-sm mb-4">填入你的 FinMind API Token 以啟用自動股票資料查詢功能。如無 API Key，系統會使用內建資料庫。</p>
+                    <div class="flex gap-3">
+                        <input type="password" id="finmind-api-key" 
+                            class="input-field flex-1"
+                            placeholder="請輸入 FinMind API Token"
+                            onchange="app.updateFinMindApiKey(this.value)">
+                        <button onclick="app.testFinMindConnection()" class="btn-primary whitespace-nowrap">
+                            <i class="fas fa-plug mr-2"></i>測試連線
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        還沒有 API Key？<a href="https://finmindtrade.com/analysis/#/ShemqE2qsk" target="_blank" class="text-blue-400 hover:underline">免費申請 FinMind API</a>
+                    </p>
+                </div>
+
                 <div class="bg-gradient-to-r from-indigo-900 to-purple-900 rounded-xl p-8 border border-purple-500/30 shadow-lg shadow-purple-900/20 text-center relative overflow-hidden">
                     <i class="fas fa-robot text-5xl text-purple-300 mb-4 drop-shadow-[0_0_15px_rgba(216,180,254,0.5)]"></i>
                     <h2 class="text-3xl font-bold mb-2 text-white">專屬 AI 台股投資顧問</h2>
@@ -484,8 +503,19 @@
 
             fetchStockInfo: async () => {
                 ui.updateApiStatus('loading', 'FinMind API 連線中...');
+                // 先使用本地資料庫
+                state.stockInfoDict = { ...LOCAL_STOCK_DB };
+                
+                // 如果有 API Key，嘗試連線
+                const token = app.finmindApiKey;
+                if (!token) {
+                    ui.updateApiStatus('offline', `使用本地資料庫 (${Object.keys(LOCAL_STOCK_DB).length} 檔常用股票)`);
+                    document.getElementById('api-hint').textContent = '* 使用本地資料庫。如需更多股票資料，請在「AI 投資報告」頁面填入 FinMind API Token。';
+                    return;
+                }
+                
                 try {
-                    const data = await api.fetchWithRetry(`${CONFIG.FINMIND_API_BASE}/data?dataset=TaiwanStockInfo`);
+                    const data = await api.fetchWithRetry(`${CONFIG.FINMIND_API_BASE}/data?dataset=TaiwanStockInfo&token=${token}`);
                     if (data.data?.length > 0) {
                         data.data.forEach(stock => {
                             state.stockInfoDict[stock.stock_id] = {
@@ -502,18 +532,18 @@
                     console.log('FinMind 連線失敗，使用本地資料庫:', error);
                     state.finmindAvailable = false;
                     ui.updateApiStatus('offline', `使用本地資料庫 (${Object.keys(LOCAL_STOCK_DB).length} 檔常用股票)`);
-                    document.getElementById('api-hint').textContent = '* FinMind API 暫時無法連線，已啟用本地資料庫。如需查詢其他股票，請直接手動輸入股票名稱與產業。';
+                    document.getElementById('api-hint').textContent = '* FinMind API 連線失敗，已啟用本地資料庫。如需查詢其他股票，請直接手動輸入股票名稱與產業。';
                 }
             },
 
             fetchLatestPrice: async (stockId) => {
-                if (!state.finmindAvailable) return null;
+                if (!state.finmindAvailable || !app.finmindApiKey) return null;
                 try {
                     const pastDate = new Date();
                     pastDate.setDate(pastDate.getDate() - 10);
                     const dateStr = pastDate.toISOString().split('T')[0];
                     const data = await api.fetchWithRetry(
-                        `${CONFIG.FINMIND_API_BASE}/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${dateStr}`
+                        `${CONFIG.FINMIND_API_BASE}/data?dataset=TaiwanStockPrice&data_id=${stockId}&start_date=${dateStr}&token=${app.finmindApiKey}`
                     );
                     if (data.data?.length > 0) return data.data[data.data.length - 1].close;
                 } catch (e) { console.error(`股價查詢失敗 ${stockId}:`, e); }
@@ -641,14 +671,65 @@
         };
 
         const app = {
+            finmindApiKey: localStorage.getItem('finmindApiKey') || '',
+
             init: () => {
                 Chart.defaults.color = '#94a3b8';
                 Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif';
                 app.renderNavigation();
                 app.setupEventListeners();
                 app.updateDashboard();
+                // 載入儲存的 FinMind API Key
+                const savedKey = localStorage.getItem('finmindApiKey');
+                if (savedKey) {
+                    document.getElementById('finmind-api-key').value = savedKey;
+                    app.finmindApiKey = savedKey;
+                }
                 api.fetchStockInfo();
                 setTimeout(() => ui.showToast('【個人化防護啟用】已自動封鎖群益證券相關標的', 'info'), 1000);
+            },
+
+            updateFinMindApiKey: (key) => {
+                app.finmindApiKey = key.trim();
+                if (app.finmindApiKey) {
+                    localStorage.setItem('finmindApiKey', app.finmindApiKey);
+                } else {
+                    localStorage.removeItem('finmindApiKey');
+                }
+            },
+
+            testFinMindConnection: async () => {
+                const key = document.getElementById('finmind-api-key').value.trim();
+                if (!key) {
+                    ui.showToast('請先輸入 FinMind API Token', 'error');
+                    return;
+                }
+                ui.showToast('正在測試 FinMind API 連線...', 'info');
+                try {
+                    const response = await fetch(`${CONFIG.FINMIND_API_BASE}/data?dataset=TaiwanStockInfo&token=${key}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const data = await response.json();
+                    if (data.data?.length > 0) {
+                        app.finmindApiKey = key;
+                        localStorage.setItem('finmindApiKey', key);
+                        // 更新股票資料庫
+                        data.data.forEach(stock => {
+                            state.stockInfoDict[stock.stock_id] = {
+                                name: stock.stock_name,
+                                sector: stock.industry_category || '其他'
+                            };
+                        });
+                        state.finmindAvailable = true;
+                        ui.updateApiStatus('connected', `FinMind API 已連線 (${data.data.length} 檔股票)`);
+                        ui.showToast(`FinMind API 連線成功！共載入 ${data.data.length} 檔股票資料`, 'success');
+                        document.getElementById('api-hint').textContent = '* FinMind API 已連線，輸入代碼後會自動帶入股票名稱與產業資訊。';
+                    } else {
+                        throw new Error('無效的回應資料');
+                    }
+                } catch (error) {
+                    ui.showToast(`FinMind API 連線失敗: ${error.message}`, 'error');
+                    ui.updateApiStatus('error', 'FinMind API 連線失敗');
+                }
             },
 
             renderNavigation: () => {
