@@ -724,9 +724,15 @@
                 }
                 ui.showToast('正在測試 FinMind API 連線...', 'info');
                 try {
-                    const response = await fetch(`${CONFIG.FINMIND_API_BASE}/data?dataset=TaiwanStockInfo&token=${key}`);
+                    // 使用 CORS 代理
+                    const apiUrl = `${CONFIG.FINMIND_API_BASE}/data?dataset=TaiwanStockInfo&token=${key}`;
+                    const proxyUrl = `${CONFIG.CORS_PROXY}${encodeURIComponent(apiUrl)}`;
+                    const response = await fetch(proxyUrl);
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const data = await response.json();
+                    
+                    const proxyData = await response.json();
+                    const data = JSON.parse(proxyData.contents);
+                    
                     if (data.data?.length > 0) {
                         app.finmindApiKey = key;
                         localStorage.setItem('finmindApiKey', key);
