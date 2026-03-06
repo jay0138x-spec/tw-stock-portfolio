@@ -346,6 +346,8 @@
             BLOCKED_STOCKS: ['6005'],
             BLOCKED_KEYWORDS: ['群益'],
             FINMIND_API_BASE: 'https://api.finmindtrade.com/api/v4',
+            // CORS 代理 - 解決瀏覽器跨域限制
+            CORS_PROXY: 'https://api.allorigins.win/get?url=',
             KIMI_API_BASE: 'https://api.moonshot.cn/v1',
             DEBOUNCE_DELAY: 500,
             TOAST_DURATION: 5000,
@@ -489,8 +491,24 @@
         const api = {
             fetchWithRetry: async (url, options = {}, retries = CONFIG.RETRY_ATTEMPTS) => {
                 try {
-                    const response = await fetch(url, options);
+                    // 檢查是否需要使用 CORS 代理 (FinMind API)
+                    let fetchUrl = url;
+                    if (url.includes('finmindtrade.com') && CONFIG.CORS_PROXY) {
+                        const encodedUrl = encodeURIComponent(url);
+                        fetchUrl = `${CONFIG.CORS_PROXY}${encodedUrl}`;
+                    }
+                    
+                    const response = await fetch(fetchUrl, options);
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    
+                    // 如果使用代理，需要解析代理回傳的格式
+                    if (url.includes('finmindtrade.com') && CONFIG.CORS_PROXY) {
+                        const proxyData = await response.json();
+                        if (proxyData.contents) {
+                            return JSON.parse(proxyData.contents);
+                        }
+                    }
+                    
                     return await response.json();
                 } catch (e) {
                     if (retries > 0) {
