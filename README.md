@@ -92,3 +92,4 @@ MIT License - 詳見 [LICENSE](LICENSE) 檔案
 - [Moonshot AI](https://moonshot.cn/) - Kimi AI 服務
 - [Tailwind CSS](https://tailwindcss.com/) - CSS 框架
 - [Chart.js](https://www.chartjs.org/) - 圖表函式庫
+ 
